@@ -124,7 +124,7 @@ while interval + INTERVAL_SPLIT < len(x):
 
     # TODO: find a good step length
     
-    S = calculate_S(x, weights, variable_name_to_position, N, M)
+    S = calculate_S(x_subset, weights, variable_name_to_position, N, M)
     descent_direction = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
     descent_direction = normalise_vector(descent_direction)
     weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
@@ -138,12 +138,12 @@ while interval + INTERVAL_SPLIT < len(x):
       eqn = build_equation(weights, M, N)
       print("loss=", loss_val, "eqn= ", eqn)
       models[interval].append([sq_error] + [w for w in weights])
-      weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+      weights = generate_weights(data_subset, gradient, variable_name_to_position, M, N)
       prev_running_norm = float('inf')
       running_norm = 0
       if len(models[interval]) >= MODELS_TO_COLLECT: break
       
-    if its > 1 and its % 100 == 1:
+    if its > 1 and its % 50 == 1:
       if running_norm < prev_running_norm*1.0:
         prev_running_norm = running_norm
         running_norm = 0
