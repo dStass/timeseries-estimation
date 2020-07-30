@@ -81,8 +81,10 @@ for char in ['a','b','c','d']:
 # # # # # # # # #
 
 EPS = 0.00000000005
+ALTERNATE_RATE = 0.00005
 RATE = 1.0
 THRESHOLD_SQ_ERR = 0.01
+BINARY_GRAN_SPLITS = 64
 INTERVAL_SPLIT = len(x) - 1 # int(len(x)/2)
 THRESHOLD_LOSS = (INTERVAL_SPLIT/ 100) * 0.8
 step_count = 0
@@ -118,32 +120,56 @@ while interval + INTERVAL_SPLIT < len(x):
   running_norm = 0
 
   its = 0
-  rate = 0.00005
+  # rate = 0.00005
   while True:
+    print("iteration {}".format(its))
     its += 1
 
     # TODO: find a good step length
     
-    S = calculate_S(x, weights, variable_name_to_position, N, M)
+    S = calculate_S(x_subset, weights, variable_name_to_position, N, M)
     descent_direction = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+    descent_direction[0] = 0
+    descent_direction[1] = 0
     descent_direction = normalise_vector(descent_direction)
+
+    rate = 0
+    new_rate = 0
+    binary_rate = RATE
+    # prev_loss = apply_function(x_subset, weights, variable_name_to_position, M, N)
+    prev_loss = get_loss(x_subset, y_subset, weights, variable_name_to_position, M, N)
+    best_rate = 0
+    for i in np.arange(0.001, 0.1, 0.001):
+      new_rate = i
+      new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
+      curr_loss = get_loss(x_subset, y_subset, new_weights, variable_name_to_position, M, N)
+      if curr_loss < prev_loss:
+        prev_loss = curr_loss
+        best_rate = new_rate
+
+    rate = best_rate
+    if rate == 0:
+      rate = ALTERNATE_RATE
+    # apply weights
     weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
     norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
-    running_norm += norm
+    # weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
+    # norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+    # running_norm += norm
 
-    f_applied_at_x = apply_function(x_subset, weights, variable_name_to_position, M, N)
-    sq_error = get_square_err(f_applied_at_x, y_subset)
+    # f_applied_at_x = apply_function(x_subset, weights, variable_name_to_position, M, N)
+    # sq_error = get_square_err(f_applied_at_x, y_subset)
     loss_val = get_loss(x_subset, y_subset, weights, variable_name_to_position, M, N)
     if loss_val < THRESHOLD_LOSS:
       eqn = build_equation(weights, M, N)
       print("loss=", loss_val, "eqn= ", eqn)
-      models[interval].append([sq_error] + [w for w in weights])
-      weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+      models[interval].append([loss_val] + [w for w in weights])
+      weights = generate_weights(data_subset, gradient, variable_name_to_position, M, N)
       prev_running_norm = float('inf')
       running_norm = 0
       if len(models[interval]) >= MODELS_TO_COLLECT: break
       
-    if its > 1 and its % 100 == 1:
+    if its > 1 and its % 50 == 1:
       if running_norm < prev_running_norm*1.0:
         prev_running_norm = running_norm
         running_norm = 0
