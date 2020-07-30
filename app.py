@@ -17,7 +17,7 @@ N = 4
 # assume data has been split
 # paths
 training_path = 'training.csv'
-save_path = 'fitted_coefficients.csv'
+save_name = 'fitted_coefficients'
 
 
 # # # # # # # # #
@@ -164,7 +164,7 @@ while interval + INTERVAL_SPLIT < len(x):
     write_out.append(model_with_interval)
   interval += 1
 
-csvrw.list_to_csv(write_out, save_path)
+csvrw.list_to_csv(write_out, save_name + '_' + str(interval) + '.csv')
 
 print("Task Completed")
 
