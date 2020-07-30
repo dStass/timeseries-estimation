@@ -216,8 +216,8 @@ def calculate_S(x, weights, weights_mapping, N, M):
 
 
 def generate_weights(data, gradient, variable_name_to_position, M, N):
-  MIN_SQERR = 0.2
-  MIN_NORM = 500
+  MIN_SQERR = 0.05
+  MIN_NORM = 10000
   sqerror = MIN_SQERR + 1
   norm = MIN_NORM + 1
 
