@@ -17,6 +17,7 @@ N = 4
 # assume data has been split
 # paths
 training_path = 'training.csv'
+save_folder = 'output_csvs/'
 save_name = 'fitted_coefficients'
 
 
@@ -41,7 +42,8 @@ x = [tup[0] for tup in training_data]
 y = [tup[1] for tup in training_data]
 
 # transform y
-y = [s - (47.222 + 0.0003*t) for s, t in zip(y, x)]
+# y = [s - (47.222 + 0.0003*t) for s, t in zip(y, x)]
+
 data = [(x[i], y[i]) for i in range(len(x))]
 
 # polynomial + sinusoidal function estimator with gradient descent
@@ -80,11 +82,12 @@ for char in ['a','b','c','d']:
 
 EPS = 0.00000000005
 RATE = 1.0
-THRESHOLD_SQ_ERR = 0.02
-INTERVAL_SPLIT = 128
+THRESHOLD_SQ_ERR = 0.01
+INTERVAL_SPLIT = len(x) - 1 # int(len(x)/2)
+THRESHOLD_LOSS = (INTERVAL_SPLIT/ 100) * 0.8
 step_count = 0
 total = 0
-MODELS_TO_COLLECT = 10
+MODELS_TO_COLLECT = 5
 
 models = {}
 
@@ -115,7 +118,7 @@ while interval + INTERVAL_SPLIT < len(x):
   running_norm = 0
 
   its = 0
-  rate = 0.005
+  rate = 0.00005
   while True:
     its += 1
 
@@ -130,26 +133,33 @@ while interval + INTERVAL_SPLIT < len(x):
 
     f_applied_at_x = apply_function(x_subset, weights, variable_name_to_position, M, N)
     sq_error = get_square_err(f_applied_at_x, y_subset)
-    if sq_error < THRESHOLD_SQ_ERR:
-      # eqn = build_equation(weights, M, N)
-      models[interval].append([w for w in weights])
+    loss_val = get_loss(x_subset, y_subset, weights, variable_name_to_position, M, N)
+    if loss_val < THRESHOLD_LOSS:
+      eqn = build_equation(weights, M, N)
+      print("loss=", loss_val, "eqn= ", eqn)
+      models[interval].append([sq_error] + [w for w in weights])
+      weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+      prev_running_norm = float('inf')
+      running_norm = 0
       if len(models[interval]) >= MODELS_TO_COLLECT: break
       
     if its > 1 and its % 100 == 1:
-      if running_norm < prev_running_norm:
+      if running_norm < prev_running_norm*1.0:
         prev_running_norm = running_norm
         running_norm = 0
       else:
         weights = generate_weights(data, gradient, variable_name_to_position, M, N)
         prev_running_norm = float('inf')
         running_norm = 0
+      print(loss_val, prev_running_norm)
+  csvrw.list_to_csv(models[interval], save_folder+save_name + '_' + str(interval) + '.csv')
   interval += 1
 
 
 # Saving models
 print("Saving models to csv")
 interval = 0
-col_name = ['interval'] \
+col_name = ['interval', 'sq_error'] \
          + ['p'+str(i) for i in range(M+1)] \
          + ['a'+str(i) for i in range(N+1)] \
          + ['b'+str(i) for i in range(N+1)] \
@@ -164,7 +174,7 @@ while interval + INTERVAL_SPLIT < len(x):
     write_out.append(model_with_interval)
   interval += 1
 
-csvrw.list_to_csv(write_out, save_name + '_' + str(interval) + '.csv')
+csvrw.list_to_csv(write_out, save_name + '_' + str(INTERVAL_SPLIT) + '_' + str(interval) + '.csv')
 
 print("Task Completed")
 

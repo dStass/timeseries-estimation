@@ -113,6 +113,9 @@ def f(x, weights, weights_mapping, M, N):
 
   return function_val
 
+def get_loss(x, y, weights, weights_mapping, M, N):
+  loss_val = sum([pow(f(x[i], weights, weights_mapping, M, N) - y[i], 2) for i in range(len(x))])
+  return loss_val
 
 # # # # # # # # # # # #
 #       PARTIALS      #
@@ -120,14 +123,14 @@ def f(x, weights, weights_mapping, M, N):
 
 # POLYNOMIAL PARTIALS
 def pj(j, data, weights, weights_mapping, S):
-  if j == 0: return 0
   ongoing_sum = 0
   for tup in data:
     x_k = tup[0]
     y_k = tup[1]
     p_j = weights[weights_mapping['p_'+str(j)]]
     S1_k = S['S1_'+str(x_k)]
-    ongoing_sum += 2*j*p_j*(pow(x_k, 2*j-1) + pow(x_k, j-1) * S1_k - y_k * pow(x_k, j-1))
+    S2_k = S['S2_'+str(x_k)]
+    ongoing_sum += 2 * (pow(x_k, j) * (S1_k + S2_k - y_k))
   return ongoing_sum
 
 # SINUSOIDAL PARTIALS
@@ -139,7 +142,7 @@ def aj(j, data, weights, weights_mapping, S):
     b_j = weights[weights_mapping['b_'+str(j)]]
     S1_k = S['S1_'+str(x_k)]
     S2_k = S['S2_'+str(x_k)]
-    ongoing_sum += 2*math.cos(b_j*x_k) * (S1_k + S2_k - y_k)
+    ongoing_sum += 2 * (math.cos(b_j*x_k) * (S1_k + S2_k - y_k))
   return ongoing_sum
 
 def bj(j, data, weights, weights_mapping, S):
@@ -151,7 +154,7 @@ def bj(j, data, weights, weights_mapping, S):
     b_j = weights[weights_mapping['b_'+str(j)]]
     S1_k = S['S1_'+str(x_k)]
     S2_k = S['S2_'+str(x_k)]
-    ongoing_sum += -(2 * x_k * a_j * math.sin(b_j * x_k) * (S1_k + S2_k - y_k))
+    ongoing_sum += -2 * (x_k * a_j * math.sin(b_j * x_k) * (S1_k + S2_k - y_k))
   return ongoing_sum
 
 def cj(j, data, weights, weights_mapping, S):
@@ -162,7 +165,7 @@ def cj(j, data, weights, weights_mapping, S):
     d_j = weights[weights_mapping['d_'+str(j)]]
     S1_k = S['S1_'+str(x_k)]
     S2_k = S['S2_'+str(x_k)]
-    ongoing_sum += 2 * math.sin(d_j * x_k) * (S1_k + S2_k - y_k)
+    ongoing_sum += 2 * (math.sin(d_j * x_k) * (S1_k + S2_k - y_k))
   return ongoing_sum
 
 def dj(j, data, weights, weights_mapping, S):
@@ -174,7 +177,7 @@ def dj(j, data, weights, weights_mapping, S):
     d_j = weights[weights_mapping['d_'+str(j)]]
     S1_k = S['S1_'+str(x_k)]
     S2_k = S['S2_'+str(x_k)]
-    ongoing_sum += 2 * x_k * c_j * math.cos(d_j * x_k) * (S1_k + S2_k - y_k)
+    ongoing_sum += 2 * (x_k * c_j * math.cos(d_j * x_k) * (S1_k + S2_k - y_k))
   return ongoing_sum
 
 # calculate sums S1 and S2 evaluated at data
@@ -216,9 +219,11 @@ def calculate_S(x, weights, weights_mapping, N, M):
 
 
 def generate_weights(data, gradient, variable_name_to_position, M, N):
-  MIN_SQERR = 0.05
-  MIN_NORM = 10000
-  sqerror = MIN_SQERR + 1
+  ACCEPTABLE_LOSS = len(data) / 50
+  MAX_SQERR = 0.2
+  MIN_NORM = 2000
+  loss = ACCEPTABLE_LOSS + 1
+  sqerror = MAX_SQERR + 1
   norm = MIN_NORM + 1
 
   x = []
@@ -227,17 +232,21 @@ def generate_weights(data, gradient, variable_name_to_position, M, N):
     x.append(tup[0])
     y.append(tup[1])
 
-  weights = None
+  # weights = None
+  # weights = [random.uniform(-0.5,0.5) for _ in range(((M+1) + 4*(N+1)))]
   # generate a close enough point to start
-  while sqerror > MIN_SQERR or norm > MIN_NORM:
+  while sqerror > MAX_SQERR or norm < MIN_NORM:
     weights = [random.uniform(-0.1,0.1) for _ in range(((M+1) + 4*(N+1)))]
     weights[0] = 0
-    weights[1] = 0
+    # weights[1] = 0
     # weights[0] = 47.22
     # weights[1] = 0.0003
     # weights[2] = 0
     fvec = apply_function(x, weights, variable_name_to_position, M, N)
     sqerror = get_square_err(fvec, y)
+    sqerror = math.sqrt(sqerror)
+
+    loss = get_loss(x, y, weights, variable_name_to_position, M, N)
 
     S = calculate_S(x, weights, variable_name_to_position, N, M)
     norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data, S, N, M))
