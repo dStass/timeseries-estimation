@@ -12,7 +12,7 @@ from funcs.functions import *
 # M (M+1 elements): no. polynomial coefficients, form: p_o + p_1*x + p_2*x^2 + ... + p_M
 # N (N+1 elements): no. sinusoidal coefficients of form SUM(n=0..N){ a_n*cos(b_n*x) + c_n*cos(d_n*x) }
 M = 1
-N = 4
+N = 0
 
 # assume data has been split
 # paths
@@ -84,12 +84,16 @@ EPS = 0.00000000005
 ALTERNATE_RATE = 0.00005
 RATE = 1.0
 THRESHOLD_SQ_ERR = 0.01
-BINARY_GRAN_SPLITS = 64
-INTERVAL_SPLIT = len(x) - 1 # int(len(x)/2)
-THRESHOLD_LOSS = (INTERVAL_SPLIT/ 100) * 0.8
+
+INTERVAL_SPLIT = len(training_data) - 1
+INTERVAL_STEP = 1
+
+THRESHOLD_LOSS = (INTERVAL_SPLIT/ 100) * 1
 step_count = 0
 total = 0
-MODELS_TO_COLLECT = 5
+MODELS_TO_COLLECT = 100
+
+INTERACTIONS_BOOL = True
 
 models = {}
 
@@ -122,13 +126,12 @@ while interval + INTERVAL_SPLIT < len(x):
   its = 0
   # rate = 0.00005
   while True:
-    print("iteration {}".format(its))
     its += 1
 
     # TODO: find a good step length
     
     S = calculate_S(x_subset, weights, variable_name_to_position, N, M)
-    descent_direction = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+    descent_direction = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M, INTERACTIONS_BOOL))
     descent_direction[0] = 0
     descent_direction[1] = 0
     descent_direction = normalise_vector(descent_direction)
@@ -139,7 +142,7 @@ while interval + INTERVAL_SPLIT < len(x):
     # prev_loss = apply_function(x_subset, weights, variable_name_to_position, M, N)
     prev_loss = get_loss(x_subset, y_subset, weights, variable_name_to_position, M, N)
     best_rate = 0
-    for i in np.arange(0.001, 0.1, 0.001):
+    for i in np.arange(0.01, 0.1, 0.01):
       new_rate = i
       new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
       curr_loss = get_loss(x_subset, y_subset, new_weights, variable_name_to_position, M, N)
@@ -152,10 +155,10 @@ while interval + INTERVAL_SPLIT < len(x):
       rate = ALTERNATE_RATE
     # apply weights
     weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
-    norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+    norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M, INTERACTIONS_BOOL))
     # weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
     # norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
-    # running_norm += norm
+    running_norm += norm
 
     # f_applied_at_x = apply_function(x_subset, weights, variable_name_to_position, M, N)
     # sq_error = get_square_err(f_applied_at_x, y_subset)
@@ -179,13 +182,13 @@ while interval + INTERVAL_SPLIT < len(x):
         running_norm = 0
       print(loss_val, prev_running_norm)
   csvrw.list_to_csv(models[interval], save_folder+save_name + '_' + str(interval) + '.csv')
-  interval += 1
+  interval += INTERVAL_STEP
 
 
 # Saving models
 print("Saving models to csv")
 interval = 0
-col_name = ['interval', 'sq_error'] \
+col_name = ['interval', 'loss'] \
          + ['p'+str(i) for i in range(M+1)] \
          + ['a'+str(i) for i in range(N+1)] \
          + ['b'+str(i) for i in range(N+1)] \
@@ -198,11 +201,12 @@ while interval + INTERVAL_SPLIT < len(x):
   for model in interval_models:
     model_with_interval = [interval] + model
     write_out.append(model_with_interval)
-  interval += 1
+  interval += INTERVAL_STEP
 
-csvrw.list_to_csv(write_out, save_name + '_' + str(INTERVAL_SPLIT) + '_' + str(interval) + '.csv')
+save_name_full = save_name + '_' + str(INTERVAL_SPLIT) + '.csv'
+csvrw.list_to_csv(write_out, save_name_full)
 
-print("Task Completed")
+print("Task Completed, saved to: ", save_name_full)
 
 
 
