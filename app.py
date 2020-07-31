@@ -11,8 +11,8 @@ from funcs.functions import *
 
 # M (M+1 elements): no. polynomial coefficients, form: p_o + p_1*x + p_2*x^2 + ... + p_M
 # N (N+1 elements): no. sinusoidal coefficients of form SUM(n=0..N){ a_n*cos(b_n*x) + c_n*cos(d_n*x) }
-M = 1
-N = 0
+M = 2
+N = 1
 
 # assume data has been split
 # paths
@@ -56,25 +56,45 @@ data = [(x[i], y[i]) for i in range(len(x))]
 # next N+1 elements are assigned to c_n in increasing order
 # next N+1 elements are assigned to d_n in increasing order
 gradient = []  # gradient vector
-variable_name_to_position = {}  # maps a variable name to its position in x and g (for its partial differentiation)
+interactions = [] # keeps a list of x^{interaction} for S1, there should be 2*N interactions (each for cosine and sine parts)
+position_map = {}  # maps a variable name to its position in x and g (for its partial differentiation)
+
 total = 0
-
-
-# fill variable_name_to_position
+# fill gradient, interactions and position_maps
 # add polynomial coefficients
-for m in range(0, M+1):
+for m in range(0, M):
   p_m_name = 'p_' + str(m)
-  variable_name_to_position[p_m_name] = total
-  gradient.append(pj)
+  gradient.append(partial('p', m, position_map, interactions))
+  interactions.append(0)
+  position_map[p_m_name] = total
   total += 1
 
 # add sinusoidal coefficients
 for char in ['a','b','c','d']:
-  for n in range(0, N+1):
-    a_n_name = char + '_' + str(n)
-    variable_name_to_position[a_n_name] = total
-    gradient.append(globals()[char+'j'])  # i.e. add methods aj, bj, cj, dj
+  for n in range(0, N):
+
+    # add gradient partials
+    interaction_amount = 0
+    if (char in ['a', 'c']): interaction_amount = 0
+
+    gradient.append(partial(char, n, position_map, interactions) )  # i.e. add methods aj, bj, cj, dj
+
+    # add to interactions
+    interactions.append(interaction_amount)
+    
+    # add to weights mapping
+    sino_n_name = char + '_' + str(n)
+    position_map[sino_n_name] = total
     total += 1
+
+# changes to interactions
+special_interactions = {
+  'a_0' : 1,
+  'c_0' : 1,
+}
+
+for interaction in special_interactions:
+  interactions[position_map[interaction]] = special_interactions[interaction]
 
 # # # # # # # # #
 #    LEARNING   #
@@ -104,6 +124,15 @@ models = {}
 prev_running_norm = float('inf')
 prev_weights = None
 
+print("Loss of intercept-gradient model")
+weights = [0] * len(gradient)
+weights[0] = 47.222
+weights[1] = 0.0003
+BENCHMARK_LOSS = get_loss(x, y, weights, position_map, interactions, M, N)
+
+print('loss=', BENCHMARK_LOSS)
+
+
 print("Begin descent")
 
 
@@ -118,7 +147,7 @@ while interval + INTERVAL_SPLIT < len(x):
   data_subset = [(x_subset[i], y_subset[i]) for i in range(len(x_subset))]
 
   # initialise weights vector
-  weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+  weights = generate_weights(data, gradient, position_map, interactions, M, N)
 
   prev_running_norm = float('inf')
   running_norm = 0
@@ -130,8 +159,8 @@ while interval + INTERVAL_SPLIT < len(x):
 
     # TODO: find a good step length
     
-    S = calculate_S(x_subset, weights, variable_name_to_position, N, M)
-    descent_direction = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M, INTERACTIONS_BOOL))
+    S = calculate_S(x_subset, weights, position_map, interactions, N, M)
+    descent_direction = neg_vector(get_gradient_at(gradient, weights, data_subset, S, N, M))
     descent_direction[0] = 0
     descent_direction[1] = 0
     descent_direction = normalise_vector(descent_direction)
@@ -139,13 +168,13 @@ while interval + INTERVAL_SPLIT < len(x):
     rate = 0
     new_rate = 0
     binary_rate = RATE
-    # prev_loss = apply_function(x_subset, weights, variable_name_to_position, M, N)
-    prev_loss = get_loss(x_subset, y_subset, weights, variable_name_to_position, M, N)
+    # prev_loss = apply_function(x_subset, weights, position_map, M, N)
+    prev_loss = get_loss(x_subset, y_subset, weights, position_map, interactions, M, N, S)
     best_rate = 0
     for i in np.arange(0.01, 0.1, 0.01):
       new_rate = i
       new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
-      curr_loss = get_loss(x_subset, y_subset, new_weights, variable_name_to_position, M, N)
+      curr_loss = get_loss(x_subset, y_subset, new_weights, position_map, interactions, M, N)
       if curr_loss < prev_loss:
         prev_loss = curr_loss
         best_rate = new_rate
@@ -155,19 +184,19 @@ while interval + INTERVAL_SPLIT < len(x):
       rate = ALTERNATE_RATE
     # apply weights
     weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
-    norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M, INTERACTIONS_BOOL))
+    norm = norm_euclidean(get_gradient_at(gradient, weights, data_subset, S, N, M))
     # weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
-    # norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+    # norm = norm_euclidean(get_gradient_at(gradient, weights, position_map, data_subset, S, N, M))
     running_norm += norm
 
-    # f_applied_at_x = apply_function(x_subset, weights, variable_name_to_position, M, N)
+    # f_applied_at_x = apply_function(x_subset, weights, position_map, M, N)
     # sq_error = get_square_err(f_applied_at_x, y_subset)
-    loss_val = get_loss(x_subset, y_subset, weights, variable_name_to_position, M, N)
-    if loss_val < THRESHOLD_LOSS:
-      eqn = build_equation(weights, M, N)
+    loss_val = get_loss(x_subset, y_subset, weights, position_map, interactions, M, N)
+    if loss_val < BENCHMARK_LOSS:
+      eqn = build_equation(weights, position_map, interactions, M, N)
       print("loss=", loss_val, "eqn= ", eqn)
       models[interval].append([loss_val] + [w for w in weights])
-      weights = generate_weights(data_subset, gradient, variable_name_to_position, M, N)
+      weights = generate_weights(data_subset, gradient, position_map, interactions, M, N)
       prev_running_norm = float('inf')
       running_norm = 0
       if len(models[interval]) >= MODELS_TO_COLLECT: break
@@ -177,7 +206,7 @@ while interval + INTERVAL_SPLIT < len(x):
         prev_running_norm = running_norm
         running_norm = 0
       else:
-        weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+        weights = generate_weights(data_subset, gradient, position_map, interactions, M, N)
         prev_running_norm = float('inf')
         running_norm = 0
       print(loss_val, prev_running_norm)
@@ -225,7 +254,7 @@ print("Task Completed, saved to: ", save_name_full)
 #   data_subset = [(x_subset[i], y_subset[i]) for i in range(len(x_subset))]
 
 #   # initialise weights vector
-#   weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+#   weights = generate_weights(data, gradient, position_map, M, N)
 
 #   prev_running_norm = 0
 #   running_norm = 0
@@ -235,8 +264,8 @@ print("Task Completed, saved to: ", save_name_full)
 #   while True:
 #     its += 1
 #     # get squared sums and generate step/descent direction
-#     S = calculate_S(x, weights, variable_name_to_position, N, M)
-#     descent_direction = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+#     S = calculate_S(x, weights, position_map, N, M)
+#     descent_direction = neg_vector(get_gradient_at(gradient, weights, position_map, data_subset, S, N, M))
 #     descent_direction = normalise_vector(descent_direction)
 
 #     # build step
@@ -246,7 +275,7 @@ print("Task Completed, saved to: ", save_name_full)
 #       new_step = step + rate
 #       rate /= 2
 #       new_weights = add_vectors(weights, mul_scalar_to_vec(new_step, descent_direction))
-#       f_x = apply_function(x_subset, new_weights, variable_name_to_position, M, N)
+#       f_x = apply_function(x_subset, new_weights, position_map, M, N)
 
 #       # get squared error
 #       new_sq_err = get_square_err(f_x, y_subset)
@@ -258,13 +287,13 @@ print("Task Completed, saved to: ", save_name_full)
     
 #     print(sq_err, rate, norm)
 #     if step == 0:
-#       weights = generate_weights(data_subset, gradient, variable_name_to_position, M, N)
+#       weights = generate_weights(data_subset, gradient, position_map, M, N)
 #       running_norm = 0
 #       prev_running_norm = 0
 #       sq_err = float('inf')
 #       continue
 #     weights = add_vectors(weights, mul_scalar_to_vec(step, descent_direction))
-#     norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data_subset, S, N, M))
+#     norm = norm_euclidean(get_gradient_at(gradient, weights, position_map, data_subset, S, N, M))
 #     running_norm += norm
 #     if sq_err < THRESHOLD_SQ_ERR:
 #       if running_norm < prev_running_norm:
@@ -278,7 +307,7 @@ print("Task Completed, saved to: ", save_name_full)
 #         if len(models[interval]) > MODELS_TO_COLLECT: break
 #     else:
 #       if its % 100 == 0 and running_norm > prev_running_norm:
-#         weights = generate_weights(data_subset, gradient, variable_name_to_position, M, N)
+#         weights = generate_weights(data_subset, gradient, position_map, M, N)
 #         sq_err = float('inf')
 #         running_norm = 0
 #         prev_running_norm = 0
@@ -291,16 +320,16 @@ print("Task Completed, saved to: ", save_name_full)
 
 # while True:
 
-#   S = calculate_S(x, weights, variable_name_to_position, N, M)
-#   step = neg_vector(get_gradient_at(gradient, weights, variable_name_to_position, data, S, N, M))
+#   S = calculate_S(x, weights, position_map, N, M)
+#   step = neg_vector(get_gradient_at(gradient, weights, position_map, data, S, N, M))
 #   step = normalise_vector(step)
 #   local_rate = rate
 #   while True:
-#     # step = get_gradient_at(gradient, weights, variable_name_to_position, training_data, S, N, M)
+#     # step = get_gradient_at(gradient, weights, position_map, training_data, S, N, M)
 #     new_weights = add_vectors(weights, mul_scalar_to_vec(local_rate, step))
     
 #     # norms.append((str(step_count), str(norm)))
-#     fvec = apply_function(x, new_weights, variable_name_to_position, M, N)
+#     fvec = apply_function(x, new_weights, position_map, M, N)
 #     new_sqerror = sqerr(fvec, y)
 #     if new_sqerror < sqerror:
 #       weights = new_weights
@@ -308,11 +337,11 @@ print("Task Completed, saved to: ", save_name_full)
 #       break
 #     local_rate /= 2
 #     if local_rate == 0:
-#       weights = weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+#       weights = weights = generate_weights(data, gradient, position_map, M, N)
 #       break
 
 
-#   norm = norm_euclidean(get_gradient_at(gradient, weights, variable_name_to_position, data, S, N, M))
+#   norm = norm_euclidean(get_gradient_at(gradient, weights, position_map, data, S, N, M))
 #   running_norm += norm
 #   if total > 0 and total % 50 == 0:
 #     print("sqerr = ", sqerror)
@@ -320,7 +349,7 @@ print("Task Completed, saved to: ", save_name_full)
 #     if running_norm < prev_running_norm:
 #       prev_running_norm = running_norm
 #     else:
-#       weights = weights = generate_weights(data, gradient, variable_name_to_position, M, N)
+#       weights = weights = generate_weights(data, gradient, position_map, M, N)
 
   
 #   if sqerror < min_sqerr or sqerror < THRESHOLD_SQERR:
