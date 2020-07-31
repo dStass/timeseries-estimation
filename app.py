@@ -89,8 +89,8 @@ for char in ['a','b','c','d']:
 
 # changes to interactions
 special_interactions = {
-  'a_0' : 1,
-  'c_0' : 1,
+  # 'a_0' : 1,
+  # 'c_0' : 1,
 }
 
 for interaction in special_interactions:
@@ -151,6 +151,7 @@ while interval + INTERVAL_SPLIT < len(x):
 
   prev_running_norm = float('inf')
   running_norm = 0
+  min_loss = float('inf')
 
   its = 0
   # rate = 0.00005
@@ -192,6 +193,9 @@ while interval + INTERVAL_SPLIT < len(x):
     # f_applied_at_x = apply_function(x_subset, weights, position_map, M, N)
     # sq_error = get_square_err(f_applied_at_x, y_subset)
     loss_val = get_loss(x_subset, y_subset, weights, position_map, interactions, M, N)
+    if loss_val < min_loss:
+      min_loss = loss_val
+      print("min_loss = ", loss_val)
     if loss_val < BENCHMARK_LOSS:
       eqn = build_equation(weights, position_map, interactions, M, N)
       print("loss=", loss_val, "eqn= ", eqn)
@@ -202,7 +206,7 @@ while interval + INTERVAL_SPLIT < len(x):
       if len(models[interval]) >= MODELS_TO_COLLECT: break
       
     if its > 1 and its % 50 == 1:
-      if running_norm < prev_running_norm*1.0:
+      if running_norm < prev_running_norm*0.99995:
         prev_running_norm = running_norm
         running_norm = 0
       else:
