@@ -58,6 +58,7 @@ def build_equation(weights, position_map, interactions, M, N):
     eqn += ' + '
   
   eqn = eqn[:-3]
+  eqn = eqn.replace('* 1 *', '*')
   return eqn
 
 def get_square_err(x, y):
@@ -339,8 +340,8 @@ def calculate_S(x, weights, position_map, interactions, N, M):
   return S
 
 
-def generate_weights(data, gradient, position_map, interactions, M, N):
-  ACCEPTABLE_LOSS = len(data) / 10
+def generate_weights(data, gradient, position_map, fixed_values, interactions, M, N):
+  ACCEPTABLE_LOSS = len(data)
   MAX_SQERR = 0.2
   MIN_NORM = 2000
   loss = ACCEPTABLE_LOSS + 1
@@ -357,15 +358,11 @@ def generate_weights(data, gradient, position_map, interactions, M, N):
   # weights = [random.uniform(-0.5,0.5) for _ in range(((M+1) + 4*(N+1)))]
   # generate a close enough point to start
   while loss > ACCEPTABLE_LOSS:
-    weights = [random.uniform(-0.1,0.1) for _ in range(((M) + 4*(N)))]
-    # weights[0] = 0
-    # weights[1] = 0
-    weights[0] = 47.222
-    weights[1] = 0.0003
-    weights[2] = 0
-    # fvec = apply_function(x, weights, position_map, M, N)
-    # sqerror = get_square_err(fvec, y)
-    # sqerror = math.sqrt(sqerror)
+    weights = [0 for m in range(M)] + [random.uniform(0.0,0.2) for _ in range((4*(N)))]
+    
+    for val in fixed_values:
+      val_pos = position_map[val]
+      weights[val_pos] = fixed_values[val]
 
     S = calculate_S(x, weights, position_map, interactions, N, M)
     loss = get_loss(x, y, weights, position_map, interactions, M, N, S)

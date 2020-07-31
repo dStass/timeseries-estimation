@@ -12,13 +12,37 @@ from funcs.functions import *
 # M (M+1 elements): no. polynomial coefficients, form: p_o + p_1*x + p_2*x^2 + ... + p_M
 # N (N+1 elements): no. sinusoidal coefficients of form SUM(n=0..N){ a_n*cos(b_n*x) + c_n*cos(d_n*x) }
 M = 2
-N = 1
+N = 2
+
+# changes to interactions
+special_interactions = {
+  'a_0' : 0,
+  'c_0' : 1,
+}
+
+fixed_values = {
+  'p_0' : 47.222,
+  'p_1' : 0.0003,
+  'a_0' : 0,
+  'a_1' : 0.009,
+  'b_0' : 1,
+  'b_1' : 0.05,
+  'c_0' : 0.00004638,
+  'c_1' : 0.1124,
+  'd_0' : 0.000002,
+  'd_1' : 0.000002
+}
+
+INTERVAL_SPLIT = 128
+INTERVAL_STEP = 64
+MODELS_TO_COLLECT = 20
+BENCHMARK_LOSS = 1
 
 # assume data has been split
 # paths
 training_path = 'training.csv'
 save_folder = 'output_csvs/'
-save_name = 'fitted_coefficients'
+save_name = 'new_fit'
 
 
 # # # # # # # # #
@@ -74,7 +98,7 @@ for char in ['a','b','c','d']:
   for n in range(0, N):
 
     # add gradient partials
-    interaction_amount = 0
+    interaction_amount = 1
     if (char in ['a', 'c']): interaction_amount = 0
 
     gradient.append(partial(char, n, position_map, interactions) )  # i.e. add methods aj, bj, cj, dj
@@ -87,11 +111,6 @@ for char in ['a','b','c','d']:
     position_map[sino_n_name] = total
     total += 1
 
-# changes to interactions
-special_interactions = {
-  # 'a_0' : 1,
-  # 'c_0' : 1,
-}
 
 for interaction in special_interactions:
   interactions[position_map[interaction]] = special_interactions[interaction]
@@ -105,15 +124,12 @@ ALTERNATE_RATE = 0.00005
 RATE = 1.0
 THRESHOLD_SQ_ERR = 0.01
 
-INTERVAL_SPLIT = len(training_data) - 1
-INTERVAL_STEP = 1
+# INTERVAL_SPLIT = len(training_data) - 1
+# INTERVAL_STEP = 1
 
 THRESHOLD_LOSS = (INTERVAL_SPLIT/ 100) * 1
 step_count = 0
 total = 0
-MODELS_TO_COLLECT = 100
-
-INTERACTIONS_BOOL = True
 
 models = {}
 
@@ -128,9 +144,17 @@ print("Loss of intercept-gradient model")
 weights = [0] * len(gradient)
 weights[0] = 47.222
 weights[1] = 0.0003
-BENCHMARK_LOSS = get_loss(x, y, weights, position_map, interactions, M, N)
+# BENCHMARK_LOSS = get_loss(x, y, weights, position_map, interactions, M, N)
 
-print('loss=', BENCHMARK_LOSS)
+# print('loss=', BENCHMARK_LOSS)
+
+# fixed_weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
+# print("fixed loss: ", get_loss(x, y, fixed_weights, position_map, interactions, M, N))
+
+# interactions = [1]*len(interactions)
+# fixed_weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
+# print("fixed loss2: ", get_loss(x, y, fixed_weights, position_map, interactions, M, N))
+
 
 
 print("Begin descent")
@@ -147,7 +171,7 @@ while interval + INTERVAL_SPLIT < len(x):
   data_subset = [(x_subset[i], y_subset[i]) for i in range(len(x_subset))]
 
   # initialise weights vector
-  weights = generate_weights(data, gradient, position_map, interactions, M, N)
+  weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
 
   prev_running_norm = float('inf')
   running_norm = 0
@@ -162,8 +186,8 @@ while interval + INTERVAL_SPLIT < len(x):
     
     S = calculate_S(x_subset, weights, position_map, interactions, N, M)
     descent_direction = neg_vector(get_gradient_at(gradient, weights, data_subset, S, N, M))
-    descent_direction[0] = 0
-    descent_direction[1] = 0
+    # descent_direction[0] = 0
+    # descent_direction[1] = 0
     descent_direction = normalise_vector(descent_direction)
 
     rate = 0
@@ -198,22 +222,24 @@ while interval + INTERVAL_SPLIT < len(x):
       print("min_loss = ", loss_val)
     if loss_val < BENCHMARK_LOSS:
       eqn = build_equation(weights, position_map, interactions, M, N)
-      print("loss=", loss_val, "eqn= ", eqn)
+      if loss_val == min_loss: indent = '> '
+      else: indent = ''
+      print(indent, "loss=", loss_val, "eqn= ", eqn, sep='')
       models[interval].append([loss_val] + [w for w in weights])
-      weights = generate_weights(data_subset, gradient, position_map, interactions, M, N)
+      weights = generate_weights(data_subset, gradient, position_map, fixed_values, interactions, M, N)
       prev_running_norm = float('inf')
       running_norm = 0
       if len(models[interval]) >= MODELS_TO_COLLECT: break
       
     if its > 1 and its % 50 == 1:
-      if running_norm < prev_running_norm*0.99995:
+      if running_norm < prev_running_norm*0.995:
         prev_running_norm = running_norm
         running_norm = 0
       else:
-        weights = generate_weights(data_subset, gradient, position_map, interactions, M, N)
+        weights = generate_weights(data_subset, gradient, position_map, fixed_values, interactions, M, N)
         prev_running_norm = float('inf')
         running_norm = 0
-      print(loss_val, prev_running_norm)
+
   csvrw.list_to_csv(models[interval], save_folder+save_name + '_' + str(interval) + '.csv')
   interval += INTERVAL_STEP
 
@@ -222,11 +248,11 @@ while interval + INTERVAL_SPLIT < len(x):
 print("Saving models to csv")
 interval = 0
 col_name = ['interval', 'loss'] \
-         + ['p'+str(i) for i in range(M+1)] \
-         + ['a'+str(i) for i in range(N+1)] \
-         + ['b'+str(i) for i in range(N+1)] \
-         + ['c'+str(i) for i in range(N+1)] \
-         + ['d'+str(i) for i in range(N+1)]
+         + ['p'+str(i) for i in range(M)] \
+         + ['a'+str(i) for i in range(N)] \
+         + ['b'+str(i) for i in range(N)] \
+         + ['c'+str(i) for i in range(N)] \
+         + ['d'+str(i) for i in range(N)]
 
 write_out = [col_name]
 while interval + INTERVAL_SPLIT < len(x):
