@@ -13,34 +13,80 @@ from funcs.functions import *
 # N (N+1 elements): no. sinusoidal coefficients of form SUM(n=0..N){ a_n*cos(b_n*x) + c_n*cos(d_n*x) }
 M = 2
 N = 2
+BENCHMARK_LOSS = 4.5
+
 
 # changes to interactions
 special_interactions = {
-  'a_0' : 0,
-  'c_0' : 1,
+  'a_0' : 1,
+  'c_0' : 1
+
 }
+
 
 fixed_values = {
-  'p_0' : 47.222,
-  'p_1' : 0.0003,
-  'a_0' : 0,
-  'a_1' : 0.009,
-  'b_0' : 1,
-  'b_1' : 0.05,
-  'c_0' : 0.00004638,
-  'c_1' : 0.1124,
-  'd_0' : 0.000002,
-  'd_1' : 0.000002
+
+
+  'p_0' : 47.2219999244506,
+  'p_1' : 0.0002483385777,
+  'a_0' : 0.0001147328326,
+  'b_0' : 0.0505138789045,
+  'c_0' : -0.0000559920811,
+  'd_0' : 0.050516330908,
+  # 'c_0' : 0.0129,
+  # 'd_0' : 0.0016
+  # 'c_0' : 0.00018,
+  # 'd_0' : -0.048,
+
+  # 'a_0' : -0.005,
+  # 'b_0' : -0.14,
+  # 'c_0' : 0.007,
+  # 'd_0' : 0.0831,
+  # 'p_0' : 47.222,
+  # 'p_1' : 0.0003,
+
+  # 'a_0' : 0.03901 * math.cos(0.03409),
+  # 'a_1' : -0.00001879 * math.cos(0.03409),
+  # 'a_2' : 0.02802 * math.sin(0.0166),
+  # 'b_0' : -0.00003944,
+  # 'b_1' : -0.00003944,
+  # 'b_2' : 0.00003766,
+  # 'c_0' : -0.03901 * math.sin(0.0166),
+  # 'c_1' : 0.00001879 * math.sin(0.03409),
+  # 'c_2' : 0.02808 * math.cos(0.0166),
+  # 'd_0' : -0.00003944,
+  # 'd_1' : -0.00003944,
+  # 'd_2' : 0.00003766,
+
+
+
+  # # 'p_0' : 47.222,
+  # # 'p_1' : 0.0003,
+  # # 'b_0' : 0.05,
+
+  
+  # 'a_0' : 0.003901,
+  # 'a_1' : -0.00001879,
+  # # 'b_0' : 1,
+  # # 'b_1' : 0.05,
+  # 'c_0' : 0.002808,
+  # 'c_1' : 0,
+  # # 'd_0' : 0.000002,
+  # # 'd_1' : 0.000002
 }
 
-INTERVAL_SPLIT = 128
-INTERVAL_STEP = 64
-MODELS_TO_COLLECT = 20
-BENCHMARK_LOSS = 1
+CULL_AMOUNT = 1
+INTERVAL_SPLIT = 817 - CULL_AMOUNT # 128  767
+INTERVAL_STEP = 1  # 64
+MODELS_TO_COLLECT = 200
+BINARY_GRANULARITY = 32
+
+# BENCHMARK_LOSS = 1
 
 # assume data has been split
 # paths
 training_path = 'training.csv'
+# training_path = 'training.csv'
 save_folder = 'output_csvs/'
 save_name = 'new_fit'
 
@@ -59,7 +105,8 @@ print("Starting app..")
 # read training data
 csvrw = CSVReadWrite()
 training_data = csvrw.csv_to_list(training_path)
-training_data = [(float(tup[0]), float(tup[1])) for tup in training_data]
+col_names = training_data[1]
+training_data = [(float(tup[0]), float(tup[1])) for tup in training_data[1:-CULL_AMOUNT]]
 
 # separate data into x and y lists
 x = [tup[0] for tup in training_data]
@@ -120,7 +167,7 @@ for interaction in special_interactions:
 # # # # # # # # #
 
 EPS = 0.00000000005
-ALTERNATE_RATE = 0.00005
+ALTERNATE_RATE = 0.000005
 RATE = 1.0
 THRESHOLD_SQ_ERR = 0.01
 
@@ -146,10 +193,18 @@ weights[0] = 47.222
 weights[1] = 0.0003
 # BENCHMARK_LOSS = get_loss(x, y, weights, position_map, interactions, M, N)
 
-# print('loss=', BENCHMARK_LOSS)
+# weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
 
-# fixed_weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
-# print("fixed loss: ", get_loss(x, y, fixed_weights, position_map, interactions, M, N))
+print('loss=', BENCHMARK_LOSS)
+
+
+# BENCHMARK_LOSS = 2.1
+
+
+fixed_weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
+print("eqn = ", build_equation(fixed_weights, position_map, interactions, M, N))
+print("fixed loss: ", get_loss(x, y, fixed_weights, position_map, interactions, M, N))
+print("fixed r2=",  get_r_squared(x, y, fixed_weights, position_map, interactions, M, N))
 
 # interactions = [1]*len(interactions)
 # fixed_weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
@@ -180,6 +235,8 @@ while interval + INTERVAL_SPLIT < len(x):
   its = 0
   # rate = 0.00005
   while True:
+    reset = False
+
     its += 1
 
     # TODO: find a good step length
@@ -190,14 +247,26 @@ while interval + INTERVAL_SPLIT < len(x):
     # descent_direction[1] = 0
     descent_direction = normalise_vector(descent_direction)
 
-    rate = 0
     new_rate = 0
-    binary_rate = RATE
     # prev_loss = apply_function(x_subset, weights, position_map, M, N)
     prev_loss = get_loss(x_subset, y_subset, weights, position_map, interactions, M, N, S)
     best_rate = 0
-    for i in np.arange(0.01, 0.1, 0.01):
-      new_rate = i
+    # for i in np.arange(0.000001, 0.001, 0.000001):
+    #   new_rate = i
+    #   new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
+    #   curr_loss = get_loss(x_subset, y_subset, new_weights, position_map, interactions, M, N)
+    #   if curr_loss < prev_loss:
+    #     prev_loss = curr_loss
+    #     best_rate = new_rate
+
+    bin_rate = 1
+    new_rate = bin_rate
+    gran_count = 0
+    while gran_count < BINARY_GRANULARITY:
+      gran_count += 1
+      bin_rate /= 2
+      new_rate = best_rate + bin_rate
+
       new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
       curr_loss = get_loss(x_subset, y_subset, new_weights, position_map, interactions, M, N)
       if curr_loss < prev_loss:
@@ -207,6 +276,8 @@ while interval + INTERVAL_SPLIT < len(x):
     rate = best_rate
     if rate == 0:
       rate = ALTERNATE_RATE
+      reset = True
+
     # apply weights
     weights = add_vectors(weights, mul_scalar_to_vec(rate, descent_direction))
     norm = norm_euclidean(get_gradient_at(gradient, weights, data_subset, S, N, M))
@@ -226,12 +297,19 @@ while interval + INTERVAL_SPLIT < len(x):
       else: indent = ''
       print(indent, "loss=", loss_val, "eqn= ", eqn, sep='')
       models[interval].append([loss_val] + [w for w in weights])
-      weights = generate_weights(data_subset, gradient, position_map, fixed_values, interactions, M, N)
-      prev_running_norm = float('inf')
-      running_norm = 0
+
+      # best model so far
+      if loss_val == min_loss:
+        fixed_values = {k : weights[position_map[k]] for k in fixed_values}
+
+      # print(fixed_values)
+
+      # weights = generate_weights(data_subset, gradient, position_map, fixed_values, interactions, M, N)
+      # prev_running_norm = float('inf')
+      # running_norm = 0
       if len(models[interval]) >= MODELS_TO_COLLECT: break
       
-    if its > 1 and its % 50 == 1:
+    if (its > 1 and its % 50 == 1) or reset:
       if running_norm < prev_running_norm*0.995:
         prev_running_norm = running_norm
         running_norm = 0

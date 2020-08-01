@@ -1,17 +1,26 @@
 import math
 import random
 import decimal
+
+def float_to_str(f):
+  """
+  Convert the given float to a string,
+  without resorting to scientific notation
+  """
+
+  # create a new context for this task
+  ctx = decimal.Context()
+
+  # 20 digits should be enough for everyone :D
+  ctx.prec = 20
+
+  d1 = ctx.create_decimal(repr(f))
+  return format(d1, 'f')
+
 def build_equation(weights, position_map, interactions, M, N):
-  def float_to_str(f):
-    """
-    Convert the given float to a string,
-    without resorting to scientific notation
-    """
-    d1 = ctx.create_decimal(repr(f))
-    return format(d1, 'f')
 
   def build_poly(weight, i):
-    weightstr = str(weight)
+    weightstr = float_to_str(weight)
     if i == 0:
       return weightstr
     else:
@@ -21,12 +30,6 @@ def build_equation(weights, position_map, interactions, M, N):
         return weightstr
       else:
         return weightstr + '^' + str(i)
-
-  # create a new context for this task
-  ctx = decimal.Context()
-
-  # 20 digits should be enough for everyone :D
-  ctx.prec = 20
 
   eqn = ''
 
@@ -109,32 +112,18 @@ def norm_euclidean(weights):
 
 # loss function
 def get_loss(x, y, weights, position_map, interactions, M, N, S = None):
-  # loss = 0
-  # for i in range(len(x)):
-  #   squared_error = 
   loss_val = sum([pow( f(x[i], weights, position_map, interactions, M, N, S) - y[i], 2) for i in range(len(x)) ] )
   return loss_val
 
-# def f_no_interactions(x, weights, position_map, M, N):
-#   function_val = 0
-
-#   # sum polynomials
-#   for i in range((M+1)):
-#     function_val += weights[i] * pow(x, i)
-  
-#   # sum sinusoidal
-#   for i in range(N+1):
-#     a_i_pos = (M+1) + i
-#     b_i_pos = a_i_pos + (N+1)
-#     c_i_pos = b_i_pos + (N+1)
-#     d_i_pos = c_i_pos + (N+1)
-#     a_i = weights[a_i_pos]
-#     b_i = weights[b_i_pos]
-#     c_i = weights[c_i_pos]
-#     d_i = weights[d_i_pos]
-#     function_val += a_i * math.cos(b_i * x) + c_i * math.sin(d_i * x)
-
-#   return function_val
+def get_r_squared(x, y, weights, position_map, interactions, M, N, S = None):
+  sample_size = len(x)
+  num_attributes = M + 4*N
+  mean_y = sum(y) / len(y)
+  SS_res = sum([ pow(y[i] - f(x[i], weights, position_map, interactions, M, N, S),2) for i in range(sample_size) ])
+  SS_total = sum([ pow(y[i] - mean_y, 2) for i in range(sample_size) ])
+  r2 = 1 - SS_res/SS_total
+  adj_r2 = 1 - (((1-r2) * (sample_size - 1))/(sample_size - num_attributes - 1))
+  return adj_r2
 
 def f(x_k, weights, position_map, interactions, M, N, S = None):
   sum_S1_S2 = 0
@@ -174,10 +163,6 @@ def get_gradient_at(gradient, weights, data, S, N, M):
   evaluated_gradient = []
   total = 0
   for i in range(len(gradient)):
-    j = i
-    if total >= M:
-      j = 0 if N == 0 else (i - M) % N
-
     g_i_function = gradient[i]
     g_i_eval = g_i_function(data, weights, S)
     evaluated_gradient.append(g_i_eval)
@@ -189,10 +174,10 @@ def partial(type_name, j, position_map, interactions):
   def partial_pj(j, position_map, interactions):
     def apply_partial_at(data, weights, S):
       ongoing_sum = 0
+      p_j = weights[position_map['p_'+str(j)]]
       for tup in data:
         x_k = tup[0]
         y_k = tup[1]
-        p_j = weights[position_map['p_'+str(j)]]
         S1_k = S['S1_'+str(x_k)]
         S2_k = S['S2_'+str(x_k)]
         ongoing_sum += 2 * (pow(x_k, j) * (S1_k + S2_k - y_k))
@@ -217,7 +202,9 @@ def partial(type_name, j, position_map, interactions):
         y_k = tup[1]
         S1_k = S['S1_'+str(x_k)]
         S2_k = S['S2_'+str(x_k)]
+        before = ongoing_sum
         ongoing_sum += 2 * (pow(x_k, a_interaction) * math.cos(b_j * pow(x_k, b_interaction)) * (S1_k + S2_k - y_k))
+        dif = ongoing_sum - before
       return ongoing_sum
     return apply_partial_at
 
@@ -341,7 +328,7 @@ def calculate_S(x, weights, position_map, interactions, N, M):
 
 
 def generate_weights(data, gradient, position_map, fixed_values, interactions, M, N):
-  ACCEPTABLE_LOSS = len(data)
+  ACCEPTABLE_LOSS = len(data) * 5
   MAX_SQERR = 0.2
   MIN_NORM = 2000
   loss = ACCEPTABLE_LOSS + 1
@@ -358,7 +345,7 @@ def generate_weights(data, gradient, position_map, fixed_values, interactions, M
   # weights = [random.uniform(-0.5,0.5) for _ in range(((M+1) + 4*(N+1)))]
   # generate a close enough point to start
   while loss > ACCEPTABLE_LOSS:
-    weights = [0 for m in range(M)] + [random.uniform(0.0,0.2) for _ in range((4*(N)))]
+    weights = [0 for m in range(M)] + [random.uniform(0.0,0.05) for _ in range((4*(N)))]
     
     for val in fixed_values:
       val_pos = position_map[val]
