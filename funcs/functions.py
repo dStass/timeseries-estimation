@@ -70,6 +70,7 @@ def get_square_err(x, y):
     err += pow((x[i] - y[i]), 2)
   return err/len(x)
 
+
 # execute function
 def apply_function(vec, weights, position_map, M, N):
   to_return = []
@@ -124,6 +125,11 @@ def get_r_squared(x, y, weights, position_map, interactions, M, N, S = None):
   r2 = 1 - SS_res/SS_total
   adj_r2 = 1 - (((1-r2) * (sample_size - 1))/(sample_size - num_attributes - 1))
   return adj_r2
+
+def get_squared_residual(x, y, weights, position_map, interactions, M, N, S = None):
+  sample_size = len(x)
+  SS_res = sum([ pow(y[i] - f(x[i], weights, position_map, interactions, M, N, S),2) for i in range(sample_size) ])
+  return SS_res
 
 def f(x_k, weights, position_map, interactions, M, N, S = None):
   sum_S1_S2 = 0
@@ -345,11 +351,12 @@ def generate_weights(data, gradient, position_map, fixed_values, interactions, M
   # weights = [random.uniform(-0.5,0.5) for _ in range(((M+1) + 4*(N+1)))]
   # generate a close enough point to start
   while loss > ACCEPTABLE_LOSS:
-    weights = [0 for m in range(M)] + [random.uniform(0.0,0.05) for _ in range((4*(N)))]
+    weights = [0 for m in range(M)] + [random.uniform(-0.0005,0.0005) for _ in range((4*(N)))]
     
     for val in fixed_values:
       val_pos = position_map[val]
       weights[val_pos] = fixed_values[val]
+    if len(fixed_values) == (M + 4*N): break
 
     S = calculate_S(x, weights, position_map, interactions, N, M)
     loss = get_loss(x, y, weights, position_map, interactions, M, N, S)

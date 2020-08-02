@@ -11,8 +11,12 @@ from funcs.functions import *
 
 # M (M+1 elements): no. polynomial coefficients, form: p_o + p_1*x + p_2*x^2 + ... + p_M
 # N (N+1 elements): no. sinusoidal coefficients of form SUM(n=0..N){ a_n*cos(b_n*x) + c_n*cos(d_n*x) }
-M = 2
-N = 2
+# M = 2
+# N = 2
+
+M = 0
+N = 1
+
 BENCHMARK_LOSS = 4.5
 
 
@@ -20,72 +24,51 @@ BENCHMARK_LOSS = 4.5
 special_interactions = {
   'a_0' : 1,
   'c_0' : 1
-
 }
 
 
 fixed_values = {
 
+  # seasonality geogebra
+  # 'a_0' : 0.00007625434,
+  # 'b_0' : 0.05,
+  # 'c_0' : 0.05,
+  # 'd_0' : -0.00005775635,
 
-  'p_0' : 47.2219999244506,
-  'p_1' : 0.0002483385777,
-  'a_0' : 0.0001147328326,
-  'b_0' : 0.0505138789045,
-  'c_0' : -0.0000559920811,
-  'd_0' : 0.050516330908,
-  # 'c_0' : 0.0129,
-  # 'd_0' : 0.0016
-  # 'c_0' : 0.00018,
-  # 'd_0' : -0.048,
-
-  # 'a_0' : -0.005,
-  # 'b_0' : -0.14,
-  # 'c_0' : 0.007,
-  # 'd_0' : 0.0831,
-  # 'p_0' : 47.222,
-  # 'p_1' : 0.0003,
-
-  # 'a_0' : 0.03901 * math.cos(0.03409),
-  # 'a_1' : -0.00001879 * math.cos(0.03409),
-  # 'a_2' : 0.02802 * math.sin(0.0166),
-  # 'b_0' : -0.00003944,
-  # 'b_1' : -0.00003944,
-  # 'b_2' : 0.00003766,
-  # 'c_0' : -0.03901 * math.sin(0.0166),
-  # 'c_1' : 0.00001879 * math.sin(0.03409),
-  # 'c_2' : 0.02808 * math.cos(0.0166),
-  # 'd_0' : -0.00003944,
-  # 'd_1' : -0.00003944,
-  # 'd_2' : 0.00003766,
+  # seasonality gradient descent
+  # loss=0.7320964608205832eqn= 0.00007907479197745075 * x * cos(0.05051324956508964 * x) + -0.00004163450149742875 * x * sin(0.05051749589836491 * x)
+  'a_0' : 0.00007907479197745075,
+  'b_0' : 0.05051324956508964,
+  'c_0' : -0.00004163450149742875,
+  'd_0' : 0.05051749589836491,  
 
 
+  # raw data
+  # 'p_0' : 47.22199990800441,
+  # 'p_1' : 0.00025142338955179297,
+  # 'a_0' : 0.0000180254563817072 ,
+  # 'b_0' : 0.050454385282386875,
+  # 'c_0' : -0.000037216854880379544,
+  # 'd_0' : 0.05007175384854332,
+  # 'a_1' : -0.00045322083352745545,
+  # 'b_1' : 0.9994464599181256,
+  # 'c_1' : -0.03233436835087745,
+  # 'd_1' : 0.050941815649287896,
 
-  # # 'p_0' : 47.222,
-  # # 'p_1' : 0.0003,
-  # # 'b_0' : 0.05,
 
-  
-  # 'a_0' : 0.003901,
-  # 'a_1' : -0.00001879,
-  # # 'b_0' : 1,
-  # # 'b_1' : 0.05,
-  # 'c_0' : 0.002808,
-  # 'c_1' : 0,
-  # # 'd_0' : 0.000002,
-  # # 'd_1' : 0.000002
 }
 
 CULL_AMOUNT = 1
 INTERVAL_SPLIT = 817 - CULL_AMOUNT # 128  767
 INTERVAL_STEP = 1  # 64
-MODELS_TO_COLLECT = 200
+MODELS_TO_COLLECT = 2000
 BINARY_GRANULARITY = 32
 
 # BENCHMARK_LOSS = 1
 
 # assume data has been split
 # paths
-training_path = 'training.csv'
+training_path = 'moving_average_data.csv'
 # training_path = 'training.csv'
 save_folder = 'output_csvs/'
 save_name = 'new_fit'
@@ -205,6 +188,7 @@ fixed_weights = generate_weights(data, gradient, position_map, fixed_values, int
 print("eqn = ", build_equation(fixed_weights, position_map, interactions, M, N))
 print("fixed loss: ", get_loss(x, y, fixed_weights, position_map, interactions, M, N))
 print("fixed r2=",  get_r_squared(x, y, fixed_weights, position_map, interactions, M, N))
+print("sqRes =",  get_squared_residual(x, y, fixed_weights, position_map, interactions, M, N))
 
 # interactions = [1]*len(interactions)
 # fixed_weights = generate_weights(data, gradient, position_map, fixed_values, interactions, M, N)
@@ -251,27 +235,27 @@ while interval + INTERVAL_SPLIT < len(x):
     # prev_loss = apply_function(x_subset, weights, position_map, M, N)
     prev_loss = get_loss(x_subset, y_subset, weights, position_map, interactions, M, N, S)
     best_rate = 0
-    # for i in np.arange(0.000001, 0.001, 0.000001):
-    #   new_rate = i
-    #   new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
-    #   curr_loss = get_loss(x_subset, y_subset, new_weights, position_map, interactions, M, N)
-    #   if curr_loss < prev_loss:
-    #     prev_loss = curr_loss
-    #     best_rate = new_rate
-
-    bin_rate = 1
-    new_rate = bin_rate
-    gran_count = 0
-    while gran_count < BINARY_GRANULARITY:
-      gran_count += 1
-      bin_rate /= 2
-      new_rate = best_rate + bin_rate
-
+    for i in np.arange(0.000001, 0.001, 0.000001):
+      new_rate = i
       new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
       curr_loss = get_loss(x_subset, y_subset, new_weights, position_map, interactions, M, N)
       if curr_loss < prev_loss:
         prev_loss = curr_loss
         best_rate = new_rate
+
+    # bin_rate = 1
+    # new_rate = bin_rate
+    # gran_count = 0
+    # while gran_count < BINARY_GRANULARITY:
+    #   gran_count += 1
+    #   bin_rate /= 2
+    #   new_rate = best_rate + bin_rate
+
+    #   new_weights = add_vectors(weights, mul_scalar_to_vec(new_rate, descent_direction))
+    #   curr_loss = get_loss(x_subset, y_subset, new_weights, position_map, interactions, M, N)
+    #   if curr_loss < prev_loss:
+    #     prev_loss = curr_loss
+    #     best_rate = new_rate
 
     rate = best_rate
     if rate == 0:
@@ -344,132 +328,3 @@ save_name_full = save_name + '_' + str(INTERVAL_SPLIT) + '.csv'
 csvrw.list_to_csv(write_out, save_name_full)
 
 print("Task Completed, saved to: ", save_name_full)
-
-
-
-
-
-
-
-
-# interval = 0
-# while interval + INTERVAL_SPLIT < len(x):
-#   models[interval] = []
-
-#   # gather subset of data
-#   x_subset = x[interval : interval + INTERVAL_SPLIT]
-#   y_subset = y[interval : interval + INTERVAL_SPLIT]
-#   data_subset = [(x_subset[i], y_subset[i]) for i in range(len(x_subset))]
-
-#   # initialise weights vector
-#   weights = generate_weights(data, gradient, position_map, M, N)
-
-#   prev_running_norm = 0
-#   running_norm = 0
-
-#   its = 0
-#   sq_err = float('inf')
-#   while True:
-#     its += 1
-#     # get squared sums and generate step/descent direction
-#     S = calculate_S(x, weights, position_map, N, M)
-#     descent_direction = neg_vector(get_gradient_at(gradient, weights, position_map, data_subset, S, N, M))
-#     descent_direction = normalise_vector(descent_direction)
-
-#     # build step
-#     rate = RATE
-#     step = 0
-#     while True:
-#       new_step = step + rate
-#       rate /= 2
-#       new_weights = add_vectors(weights, mul_scalar_to_vec(new_step, descent_direction))
-#       f_x = apply_function(x_subset, new_weights, position_map, M, N)
-
-#       # get squared error
-#       new_sq_err = get_square_err(f_x, y_subset)
-#       if new_sq_err <= sq_err:
-#         sq_err = new_sq_err
-#         step = new_step
-    
-#       if rate <= EPS: break
-    
-#     print(sq_err, rate, norm)
-#     if step == 0:
-#       weights = generate_weights(data_subset, gradient, position_map, M, N)
-#       running_norm = 0
-#       prev_running_norm = 0
-#       sq_err = float('inf')
-#       continue
-#     weights = add_vectors(weights, mul_scalar_to_vec(step, descent_direction))
-#     norm = norm_euclidean(get_gradient_at(gradient, weights, position_map, data_subset, S, N, M))
-#     running_norm += norm
-#     if sq_err < THRESHOLD_SQ_ERR:
-#       if running_norm < prev_running_norm:
-#         prev_running_norm = running_norm
-#         prev_weights = weights
-#       else:
-#         models[interval].append([w for w in prev_weights])
-#         eqn = build_equation(weights, M, N)
-#         text = "cycle= " + str(total) + " min_sqerr = " + str(min_sqerr) + ", eqn=" + eqn + '\n\n\n'
-#         print("sqerr=", sqerror, ", eqn = ", eqn)
-#         if len(models[interval]) > MODELS_TO_COLLECT: break
-#     else:
-#       if its % 100 == 0 and running_norm > prev_running_norm:
-#         weights = generate_weights(data_subset, gradient, position_map, M, N)
-#         sq_err = float('inf')
-#         running_norm = 0
-#         prev_running_norm = 0
-#         continue
-
-#   interval += 1
-  
-
-
-
-# while True:
-
-#   S = calculate_S(x, weights, position_map, N, M)
-#   step = neg_vector(get_gradient_at(gradient, weights, position_map, data, S, N, M))
-#   step = normalise_vector(step)
-#   local_rate = rate
-#   while True:
-#     # step = get_gradient_at(gradient, weights, position_map, training_data, S, N, M)
-#     new_weights = add_vectors(weights, mul_scalar_to_vec(local_rate, step))
-    
-#     # norms.append((str(step_count), str(norm)))
-#     fvec = apply_function(x, new_weights, position_map, M, N)
-#     new_sqerror = sqerr(fvec, y)
-#     if new_sqerror < sqerror:
-#       weights = new_weights
-#       sqerror = new_sqerror
-#       break
-#     local_rate /= 2
-#     if local_rate == 0:
-#       weights = weights = generate_weights(data, gradient, position_map, M, N)
-#       break
-
-
-#   norm = norm_euclidean(get_gradient_at(gradient, weights, position_map, data, S, N, M))
-#   running_norm += norm
-#   if total > 0 and total % 50 == 0:
-#     print("sqerr = ", sqerror)
-#     print("avgnorm = ", running_norm / total)
-#     if running_norm < prev_running_norm:
-#       prev_running_norm = running_norm
-#     else:
-#       weights = weights = generate_weights(data, gradient, position_map, M, N)
-
-  
-#   if sqerror < min_sqerr or sqerror < THRESHOLD_SQERR:
-#     # min_norm = norm
-#     min_sqerr = min(min_sqerr, sqerror)
-#     min_weights = [w for w in weights]
-#     eqn = build_equation(weights, M, N)
-#     text = "cycle= " + str(total) + " min_sqerr = " + str(min_sqerr) + ", eqn=" + eqn + '\n\n\n'
-#     print("sqerr=", sqerror, ", eqn = ", eqn)
-#     with open("log.txt", "a") as myfile:
-#       myfile.write(text)
-#     step_count = 0
-#   # print("avg=", sum(norms)/len(norms), "min=", min(norms))
-#   step_count += 1
-#   total += 1
